@@ -83,10 +83,16 @@ abstract class Drawable {
 class Centerer extends Drawable {
   Centerer({@required this.child});
   final Drawable child;
-  Size get size => child.size;
+  Size get size => Size.infinite;
   Size paint(Canvas canvas, Size size, Offset position) {
-    return child.paint(canvas, size,
-        (position + toOffset(size / 2)) - toOffset(child.size / 2));
+    child.paint(
+        canvas,
+        size,
+        child.size ==
+                Size.infinite // TODO: use component logic for each dimension seperatly
+            ? position
+            : (position + toOffset(size / 2)) - toOffset(child.size / 2));
+    return size;
   }
 
   void tap(TapDownDetails details) => child.tap(details);
@@ -101,15 +107,26 @@ class Rectangle extends Drawable {
       : csize = size;
   final Drawable child;
   final Size csize;
-  Size get size => csize ?? child?.size ?? Size(0, 0);
+  Size get size => csize ?? child?.size ?? Size.infinite;
   final Color color;
   Size paint(Canvas canvas, Size size, Offset position) {
+    //print("canvas, $size, $position");
+    double sizeW = (csize?.width ?? double.infinity) == double.infinity
+        ? size.width
+        : csize.width;
+    double sizeH = (csize?.height ?? double.infinity) == double.infinity
+        ? size.height
+        : csize.height;
     canvas.drawRect(
-        Rect.fromLTWH(position.dx, position.dy, csize?.width ?? size.width,
-            csize?.height ?? size.height),
+        Rect.fromLTWH(
+          position.dx,
+          position.dy,
+          sizeW,
+          sizeH,
+        ),
         Paint()..color = color);
     child?.paint(canvas, csize ?? size, position);
-    return csize ?? size;
+    return Size(sizeW, sizeH);
   }
 
   void tap(TapDownDetails details) => child.tap(details);
@@ -180,50 +197,82 @@ abstract class Builder extends Drawable {
   bool shouldRepaint(Drawable old) => true;
 }
 
-class RowList extends Drawable {
-  RowList({@required this.children});
+abstract class ListDrawer extends Drawable {
+  ListDrawer({@required this.children});
   final List<Drawable> children;
-  Size get size => children.fold(Size(0, 0),
-      (previousValue, element) => element.size + toOffset(previousValue));
-  bool shouldRepaint(RowList old) => true;
+  bool get isRow;
+  Size get size {
+    Offset crossAxisSize = toOffset(
+      isRow ? Size(0, double.infinity) : Size(double.infinity, 0),
+    );
+    Size mainAxisSize = children.fold(
+      Size.zero,
+      (previousValue, element) => element.size + toOffset(previousValue),
+    );
+    //print("$mainAxisSize.component + $crossAxisSize ");
+    return isRow ? Size(mainAxisSize.width, 0) : Size(0, mainAxisSize.height) +
+        crossAxisSize;
+  }
+
+  bool shouldRepaint(ListDrawer old) => true;
   Size paint(Canvas canvas, Size size, Offset position) {
-    double offset = 0;
-    double addSize = 0;
-    for (Drawable child in children) {
-      double chsize = child
-          .paint(
-              canvas,
-              Size((size.width / children.length) + addSize, size.height),
-              position + Offset(offset, 0))
-          .width;
-      addSize += (size.width / children.length) - chsize;
-      offset += chsize;
+    double usedSize = 0;
+    int expandedCount = 0;
+    for (Drawable drawable in children) {
+      if (component(isRow, drawable.size) != double.infinity) {
+        usedSize += component(isRow, drawable.size);
+        //print(
+           // "new usedSize: $usedSize (${drawable.runtimeType}.size = ${drawable.size})");
+      } else {
+        expandedCount++;
+      }
     }
-    return toSize(size - Size(addSize, 0));
+    Size listVector = isRow ? Size(1, 0) : Size(0, 1);
+    Size crossAxisSize = isRow ? Size(0, size.height) : Size(size.width, 0);
+    double totalSize = component(isRow, size) - usedSize;
+    Size expandedSize =
+        crossAxisSize + toOffset(listVector * (totalSize / expandedCount));
+    Size addedPos = Size.zero;
+    for (Drawable drawable in children) {
+      if (component(isRow, drawable.size) == double.infinity) {
+        //print(
+           // "${isRow ? "" : "  "}Drawing as-large-as-possible ${drawable.runtimeType}: available size $expandedSize; usedSize: $usedSize list vector $listVector; crossAxisSize: $crossAxisSize; expandedCount: $expandedCount; total size $size (expandeds use $totalSize)");
+        addedPos += toOffset(drawable.paint(
+          canvas,
+          expandedSize,
+          position +
+              (isRow ? Offset(addedPos.width, 0) : Offset(0, addedPos.height)),
+        ));
+      } else {
+        Size drawableSize = component(!isRow, drawable.size) == double.infinity
+            ? (isRow
+                ? Size(drawable.size.width, size.height)
+                : Size(size.width, drawable.size.height))
+            : drawable.size;
+
+        //print(
+          //  "Drawing ${drawable.runtimeType}: requested size ${drawable.size}; given size $drawableSize; position ${position + (isRow ? Offset(addedPos.width, 0) : Offset(0, addedPos.height))}");
+        addedPos += toOffset(drawable.paint(
+          canvas,
+          drawableSize,
+          position +
+              (isRow ? Offset(addedPos.width, 0) : Offset(0, addedPos.height)),
+        ));
+      }
+    }
+    return size;
   }
 }
 
-class ColumnList extends Drawable {
-  ColumnList({@required this.children});
-  final List<Drawable> children;
-  Size get size => children.fold(Size(0, 0),
-      (previousValue, element) => element.size + toOffset(previousValue));
-  bool shouldRepaint(ColumnList old) => true;
-  Size paint(Canvas canvas, Size size, Offset position) {
-    double offset = 0;
-    double addSize = 0;
-    for (Drawable child in children) {
-      double chsize = child
-          .paint(
-              canvas,
-              Size(size.width, (size.height / children.length) + addSize),
-              position + Offset(0, offset))
-          .height;
-      addSize += (size.height / children.length) - chsize;
-      offset += chsize;
-    }
-    return toSize(size - Size(0, addSize));
-  }
+class HorizontalList extends ListDrawer {
+  HorizontalList({@required List<Drawable> children})
+      : super(children: children);
+  bool get isRow => true;
+}
+
+class VerticalList extends ListDrawer {
+  VerticalList({@required List<Drawable> children}) : super(children: children);
+  bool get isRow => false;
 }
 
 // Builders
@@ -245,4 +294,4 @@ class ColoredButton extends Builder {
 // General assets
 
 Offset toOffset(Size size) => Offset(size.width, size.height);
-Size toSize(Offset offset) => Size(offset.dx, offset.dy);
+double component(bool isX, Size size) => isX ? size.width : size.height;

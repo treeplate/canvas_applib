@@ -5,37 +5,33 @@ import 'package:canvas_thing/drawing.dart';
 void main() => draw(MyApp());
 
 class MyApp extends Builder {
-  double _n = 10;
-
   @override
   Drawable build() {
-    print("objective");
-
-    return RowList(children: [
-      Rectangle(
-        color: Colors.amber,
-      ),
-      Rectangle(
-        color: Colors.blue,
-        size: Size(10, _n),
-      ),
-      Rectangle(
-        color: Colors.amber,
-      ),
-      Rectangle(
-        color: Colors.blue,
-        size: Size(10, _n),
-      ),
-      Rectangle(
-        color: Colors.amber,
-      ),
-      ColoredButton(
-          onTap: () {
-            print("tap");
-            _n++;
-            repaint();
-          },
-          color: Colors.green)
-    ]);
+    return HorizontalList(
+      children: [
+        Rectangle(
+          color: Colors.yellow,
+          size: Size(100, double.infinity),
+        ),
+        Rectangle(
+          color: Colors.green,
+        ),
+        VerticalList(
+          children: [
+            Rectangle(
+              color: Colors.blue,
+              size: Size(double.infinity, double.infinity),
+            ),
+            Rectangle(
+              color: Colors.yellow,
+            ),
+            Rectangle(
+              color: Colors.blue,
+              size:  Size(double.infinity, double.infinity),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
