@@ -111,12 +111,12 @@ class Rectangle extends Drawable {
   final Color color;
   Size paint(Canvas canvas, Size size, Offset position) {
     //print("canvas, $size, $position");
-    double sizeW = (csize?.width ?? double.infinity) == double.infinity
+    double sizeW = ((csize?.width ?? double.infinity) == double.infinity
         ? size.width
-        : csize.width;
-    double sizeH = (csize?.height ?? double.infinity) == double.infinity
+        : csize.width).clamp(0, size.width);
+    double sizeH = ((csize?.height ?? double.infinity) == double.infinity
         ? size.height
-        : csize.height;
+        : csize.height).clamp(0, size.height);
     canvas.drawRect(
         Rect.fromLTWH(
           position.dx,
@@ -220,7 +220,7 @@ abstract class ListDrawer extends Drawable {
     int expandedCount = 0;
     for (Drawable drawable in children) {
       if (component(isRow, drawable.size) != double.infinity) {
-        usedSize += component(isRow, drawable.size);
+        usedSize += component(isRow, drawable.size).clamp(0, component(isRow, size));
         //print(
            // "new usedSize: $usedSize (${drawable.runtimeType}.size = ${drawable.size})");
       } else {
@@ -246,9 +246,9 @@ abstract class ListDrawer extends Drawable {
       } else {
         Size drawableSize = component(!isRow, drawable.size) == double.infinity
             ? (isRow
-                ? Size(drawable.size.width, size.height)
-                : Size(size.width, drawable.size.height))
-            : drawable.size;
+                ? Size(drawable.size.width.clamp(0, size.width), size.height)
+                : Size(size.width, drawable.size.height.clamp(0, size.height)))
+            : Size(drawable.size.width.clamp(0, size.width), drawable.size.height.clamp(0, size.height));
 
         //print(
           //  "Drawing ${drawable.runtimeType}: requested size ${drawable.size}; given size $drawableSize; position ${position + (isRow ? Offset(addedPos.width, 0) : Offset(0, addedPos.height))}");
